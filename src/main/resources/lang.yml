@@ -1,0 +1,102 @@
+# AbnormalEffects 语言配置文件
+# 支持颜色代码: &0-&9, &a-&f, &r, &#RRGGBB (RGB颜色, 仅1.16+版本)
+
+prefix: "&7[&b异常效果&7] "
+
+messages:
+  # 命令相关消息
+  command:
+    no-permission: "&c你没有权限执行此命令"
+    unknown-command: "&c未知的子命令。使用 &f/aeffects help &c查看帮助。"
+    config-reloaded: "&a配置已重新加载"
+    
+    # 命令用法
+    usage:
+      apply: "&c用法: &f/aeffects apply <效果ID> <累积值> <目标玩家> [施放者] &7(积累性) &c或 &f/aeffects apply <效果ID> <持续时间> <目标玩家> [施放者] &7(非积累性)"
+      apply-accumulation: "&c用法: &f/aeffects apply <效果ID> <累积值> <目标玩家> [施放者玩家] &7(积累性效果)"
+      apply-direct: "&c用法: &f/aeffects apply <效果ID> <持续时间秒> <目标玩家> [施放者玩家] &7(非积累性效果，0=即时)"
+      clear: "&c用法: &f/aeffects clear <效果ID/all> <目标玩家>"
+      look: "&c用法: &f/aeffects look [UUID] &7- 查看异常效果状态"
+    
+    # 帮助消息
+    help:
+      header: "&6====== &e异常效果插件 &6======"
+      help: "&b/aeffects help &7- 显示此帮助"
+      reload: "&b/aeffects reload &7- 重新加载配置"
+      info: "&b/aeffects info &7- 显示插件信息"
+      list: "&b/aeffects list &7- 列出所有可用效果"
+      apply: "&b/aeffects apply <效果ID> <值/时间> <目标> [施放者] &7- 应用效果"
+      apply-accumulation: "&b/aeffects apply <效果ID> <累积值> <目标> [施放者] &7- 应用积累性效果"
+      apply-direct: "&b/aeffects apply <效果ID> <持续时间> <目标> [施放者] &7- 应用非积累效果(0=即时)"
+      clear: "&b/aeffects clear <效果ID/all> <目标> &7- 清除效果"
+      look: "&b/aeffects look [UUID] &7- 查看异常效果状态"
+      footer: "&6==========================="
+    
+    # 信息显示
+    info:
+      header: "&6====== &e异常效果插件信息 &6======"
+      version: "&b版本: &f{version}"
+      authors: "&b作者: &f{authors}"
+      effect-count: "&b效果数量: &f{count}"
+      mythicmobs-version: "&bMythicMobs 版本: &f{version}"
+      placeholderapi-status: "&bPlaceholderAPI: &f{status}"
+      footer: "&6=============================="
+    
+    # 效果列表
+    list:
+      header: "&6====== &e可用效果列表 &6======"
+      no-effects: "&c没有找到任何效果定义"
+      effect-entry: "{type_mark} &f{id} &7- {effect_name}"
+      footer: "&6==========================="
+    
+    # 应用效果
+    apply:
+      unknown-effect: "&c未知的效果ID: &f{id}"
+      invalid-value: "&c值必须是一个数字"
+      player-not-found: "&c找不到目标玩家: &f{player}"
+      caster-not-found: "&c找不到施放者玩家: &f{player}"
+      success-accumulation: "&a已将积累性效果 &f{effect_name} &a(累积值: &f{value}&a) 应用于玩家 &f{player}"
+      success-direct: "&a已将直接效果 &f{effect_name} &a应用于玩家 &f{player} &7(持续时间: {seconds})"
+      effect-active: "&c玩家 &f{player} &c的效果 &f{effect_name} &c仍在持续中，无法重复应用"
+      force-default-value: "&e检测到输入的数值无效，已自动将其设为 {value}"
+    
+    # 清除效果
+    clear:
+      all-success: "&a已清除玩家 &f{player} &a的所有效果"
+      specific-success: "&a已清除玩家 &f{player} &a的效果 &f{effect_name}"
+      unknown-effect: "&c未知的效果ID: &f{id}"
+    
+    # 查看效果
+    look:
+      invalid-uuid: "&c无效的UUID格式: &f{uuid}"
+      console-need-uuid: "&c控制台执行此命令必须指定UUID参数"
+      no-effects: "&7{target} &c当前没有任何异常效果"
+      header: "&6====== &e{target} 的异常效果 &6====== &7(共 {count} 个)"
+      effect-accumulation: "&a[积累] &f{id} &7({effect_name}) &b{value}&7/&b{threshold} &7({percent}%) &8[阶段:{stage}]"
+      effect-direct: "&b[直接] &f{id} &7({effect_name}) &8[基础值:{base_value}] &e[剩余:{remaining_time}]"
+      footer: "&6================================"
+
+  # 效果相关消息
+  effects:
+    applied: "你受到了 {effect_name} 效果"
+    stage-increase: "{effect_name} 效果强度增加到 {percent}%"
+    stage-decrease: "{effect_name} 效果强度降低到 {percent}%"
+    dissipated: "{effect_name} 效果已消散"
+    threshold-reached: "&c{effect_name} 效果已达到最大强度并释放了它的力量！"
+
+# 调试消息 (仅控制台和日志)
+debug:
+  logger-not-init: "[{level}] 异常效果 (记录器未初始化): {message}"
+  invalid-target: "效果 '{id}' 的目标无效或不是生物实体。"
+  undefined-effect: "尝试应用未定义的效果: {id}"
+  tenacity-parse-error: "无法将实体 {entity} 的韧性值解析为数字"
+  tenacity-error: "无法获取实体 {entity} 的韧性属性: {error}"
+  tenacity-adjusted: "实体 {entity} 韧性 {tenacity}, 效果 '{id}' 值从 {base} 调整为 {final}"
+  check-tenacity-error: "检查实体韧性时出错: {error}"
+  effect-trigger: "实体 {entity} 触发非累积效果 '{id}' (技能: {skill}), 最终值: {value}"
+  stage-reached: "实体 {entity} 的效果 '{id}' 达到阶段 {percent}%"
+  threshold-reached: "实体 {entity} 的效果 '{id}' 达到爆发阈值 {threshold}"
+  threshold-update: "实体 {entity} 的效果 '{id}' 下次爆发阈值更新为: {threshold}"
+  decay-init: "初始化效果 {id} 在实体 {entity} 上的衰减计时器。"
+  decay-update: "实体 {entity} 的效果 '{id}' 衰减至 {value}"
+  decay-complete: "实体 {entity} 的效果 '{id}' 已完全衰减。"

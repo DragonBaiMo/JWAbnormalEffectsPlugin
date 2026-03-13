@@ -1,0 +1,37 @@
+name: JWAbnormalEffects
+version: 1.0.0
+main: com.baimo.jwabnormaleffects.JWAbnormalEffects
+api-version: 1.17 # 或者您服务器支持的更新的API版本
+author: BaiMo_
+description: 一个基于 MythicMobs API 的、高度可配置的、统一管理"积累制"与"非积累制"异常效果的增强模块。
+depend: [MythicMobs]
+softdepend: [PlaceholderAPI]
+api: "1.17"
+
+commands:
+  aeffects:
+    description: JWAbnormalEffects 主命令.
+    usage: /aeffects <help|reload|info|list|apply|clear> [args...]
+    aliases: [ae]
+permissions:
+  jwabnormaleffects.admin:
+    description: 允许使用 JWAbnormalEffects 管理命令.
+    default: op
+  jwabnormaleffects.admin.reload:
+    description: 允许使用 /aeffects reload 命令.
+    default: op
+  jwabnormaleffects.admin.info:
+    description: 允许使用 /aeffects info 命令.
+    default: op
+  jwabnormaleffects.admin.list:
+    description: 允许使用 /aeffects list 命令.
+    default: op
+  jwabnormaleffects.admin.apply:
+    description: 允许使用 /aeffects apply 命令.
+    default: op
+  jwabnormaleffects.admin.clear:
+    description: 允许使用 /aeffects clear 命令.
+    default: op
+  jwabnormaleffects.admin.look:
+    description: 允许使用 /aeffects look 命令.
+    default: op

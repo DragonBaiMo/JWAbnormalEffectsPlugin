@@ -1,0 +1,67 @@
+# AbnormalEffects 主配置文件
+# 作者: BaiMo_
+# 架构: 纯内存缓存 - 高性能，适合大型服务器
+
+# 插件调试设置
+debug:
+  # 日志级别: INFO, WARNING, FINE, FINER, FINEST
+  log-level: INFO
+  # 是否在控制台显示更详细的效果处理信息
+  verbose-effect-logs: false
+
+# 效果衰减设置
+decay:
+  # 衰减检查间隔（单位：tick，20tick = 1秒）
+  check-interval-ticks: 20
+  # 是否启用异步衰减处理（推荐开启以减轻主线程负担）
+  async-processing: true
+
+# 内存缓存设置
+cache:
+  # 无效实体数据清理间隔（单位：分钟）
+  # 定期清理已死亡或离线实体的数据以释放内存
+  cleanup-interval-minutes: 5
+  # 是否在插件启动时显示缓存统计信息
+  show-cache-stats: false
+
+# ---------- 新版韧性&收益递减配置 ----------
+# 韧性机制 (Tenacity)
+tenacity:
+  # 最大减免百分比 (例如 0.8 = 最多减免 80%)
+  max-reduction: 0.8
+  # 计算减免百分比的公式，可写任意占位符/变量/数学函数
+  formula: "%mmocore_stat_via% * 0.04 + {VAR:tenacity} * 0.05"
+
+# 全局收益递减 (Benefit-Scaling)
+benefit-scaling:
+  enabled: true
+  # 作用对象: MOB / PLAYER / BOTH
+  effect: MOB
+  # activeCount = 目标当前已激活的异常效果数量
+  formula: "1 / (1 + 0.15 * {activeCount})"
+
+# UI 与提示设置
+display:
+  # 是否启用效果应用时的提示消息
+  show-effect-messages: true
+  # 是否显示阶段变化提示
+  show-stage-transitions: true
+  # 提示消息前缀
+  message-prefix: "&7[&b异常效果&7] "
+  
+# 权限设置
+permissions:
+  # 管理命令基础权限
+  admin-base: "jwabnormaleffects.admin"
+  # 使用效果命令基础权限
+  use-base: "jwabnormaleffects.use"
+
+# 重要说明
+# ==========================================
+# 本插件使用纯内存缓存架构：
+# 1. 所有异常效果数据只存储在内存中
+# 2. 玩家离线时立即清理其效果数据
+# 3. 实体死亡时自动清理其效果数据
+# 4. 服务器重启后所有效果数据丢失
+# 5. 这种设计确保了最佳性能和游戏平衡性
+# ==========================================

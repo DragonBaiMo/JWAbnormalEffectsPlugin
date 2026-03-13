@@ -1,0 +1,90 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# AbnormalEffects 插件开发者规则
+
+本规则文件旨在帮助后续开发者快速了解项目结构、核心模块职责以及开发约定。
+
+## 1. 入口与核心模块
+
+| 角色 | 主要文件 | 说明 |
+| --- | --- | --- |
+| 插件主类 | [JWAbnormalEffectsPlugin.java](mdc:src/main/java/com/baimo/jwabnormaleffects/JWAbnormalEffectsPlugin.java) | Spigot/Bukkit `JavaPlugin` 入口，负责生命周期管理与各模块初始化。 |
+| 配置管理 | [ConfigManager.java](mdc:src/main/java/com/baimo/jwabnormaleffects/config/ConfigManager.java) | 负责加载 `config.yml` 及 `effects/*.yml`，并向其他模块提供只读配置。 |
+| 效果注册表 | [EffectRegistry.java](mdc:src/main/java/com/baimo/jwabnormaleffects/registry/EffectRegistry.java) | 保存并索引所有 `EffectDefinition`，供运行期查询。 |
+| 核心逻辑引擎 | [EffectEngine.java](mdc:src/main/java/com/baimo/jwabnormaleffects/engine/EffectEngine.java) | 处理增量累积、阶段触发、爆发逻辑、韧性计算及自然衰减。 |
+| 数据持久化 | [DataStore.java](mdc:src/main/java/com/baimo/jwabnormaleffects/persistence/DataStore.java) | 使用 Bukkit PDC 持久化实体异常状态数据。 |
+| MythicMobs 桥接 | [SkillBridge.java](mdc:src/main/java/com/baimo/jwabnormaleffects/bridge/SkillBridge.java) | 对 MythicMobs `castSkill` 的封装，解耦插件与外部 API。 |
+| 调度任务 | [DecayTask.java](mdc:src/main/java/com/baimo/jwabnormaleffects/scheduler/DecayTask.java)、[CleanupTask.java](mdc:src/main/java/com/baimo/jwabnormaleffects/scheduler/CleanupTask.java) | 处理自然衰减与离线数据清理。 |
+| 命令处理 | [CommandHandler.java](mdc:src/main/java/com/baimo/jwabnormaleffects/commands/CommandHandler.java) | 解析 `/aeffects` 命令并调用 `EffectEngine`。 |
+| Placeholder | [AbnormalEffectsExpansion.java](mdc:src/main/java/com/baimo/jwabnormaleffects/placeholders/AbnormalEffectsExpansion.java) | PlaceholderAPI 扩展，支持在 MM 技能中快速调用插件功能。 |
+
+## 2. 目录结构
+
+```
+src/
+ └─ main/
+    ├─ java/com/baimo/jwabnormaleffects/  ← 业务源码
+    │   ├─ bridge/        ← MythicMobs Skill 桥接
+    │   ├─ commands/      ← 命令解析
+    │   ├─ config/        ← 配置解析 & DTO
+    │   ├─ engine/        ← 核心业务逻辑
+    │   ├─ persistence/   ← 数据持久化
+    │   ├─ placeholders/  ← PlaceholderAPI 对接
+    │   ├─ registry/      ← 效果注册表
+    │   ├─ scheduler/     ← Bukkit 调度任务
+    │   └─ utils/         ← 公共工具类
+    └─ resources/         ← 默认配置文件
+```
+
+## 3. 开发约定
+
+1. **代码与文档必须使用中文**，包括注释与 README。
+2. **遵循 SOLID/DRY/KISS/YAGNI** 原则；严禁复制粘贴逻辑。
+3. **单一职责**：如果一个类超过 ~300 行或承担多重职责，应考虑拆分。
+4. **接口驱动**：所有对外暴露的模块（如存储、桥接）必须先定义 `I*` 接口，再实现。
+5. **异常处理**：抛出描述性异常信息；避免吞异常。
+6. **日志统一**：使用 `MessageUtils`，避免直接打印 `System.out` 或 `Logger.info`。
+7. **配置变更**：修改配置格式需同步更新 `ConfigManager` 并在 `CHANGELOG.md` 记录。
+8. **性能敏感任务**：若调度器可异步执行，优先参考 `config.yml` 中 `isAsyncDecayProcessing` 开关。调度任务已实现内存缓存优化：只处理有活跃效果的实体，避免全量遍历。
+9. **API 兼容性**：依赖 MythicMobs ≥5.0；PlaceholderAPI 为可选依赖，需做存在性检测。
+10. **单元/集成测试**：如有逻辑分支复杂的方法，应在 `src/test/` 下补充 JUnit5 测试。
+
+## 4. 数据存储架构
+
+### 纯内存缓存设计
+- **存储方式**：所有数据只存储在内存中，无持久化操作
+- **数据结构**：`Map<UUID, Map<String, EffectData>>` (实体UUID -> 效果数据映射)
+- **EffectData 包含**：累积值、阈值、最后阶段、衰减时间、活动时间
+- **性能优势**：无 I/O 操作，适合大型服务器
+
+### 自动清理机制
+- **玩家离线清理**：`PlayerQuitEvent` 监听器立即清理玩家数据
+- **实体死亡清理**：`EntityDeathEvent` 监听器清理死亡实体数据
+- **定期清理**：每5分钟清理无效实体数据（CleanupTask）
+- **服务器重启**：所有效果数据丢失，重新积累（设计如此）
+
+### 线程安全保证
+- 使用 `ConcurrentHashMap` 确保并发访问安全
+- 异步任务只做计算，实际数据操作在主线程执行
+- 事件监听器在主线程中执行，确保数据一致性
+
+## 5. 常见坑与注意事项
+
+* **内存数据丢失**：服务器重启后所有效果数据丢失，这是设计行为，确保游戏平衡性。
+* **异步与主线程交互**：调用 Bukkit API 需确保在主线程运行；跨线程访问实体需使用 `Bukkit.getScheduler().runTask`。
+* **UUID 参数使用**：所有 DataStore 接口方法使用 UUID 而不是 Entity 对象，提升性能，且所有UUID不一定只是玩家，要支持非玩家。
+* **MythicMobs 技能名变更**：Skill 名称改动需同步更新 `effects/*.yml`。
+* **Placeholder 参数顺序**：保持兼容旧版本，占位符格式变更前必须讨论并注明弃用策略。
+
+---
+
+> 本规则文件仅供开发阶段参考，若与上层《用户规则》冲突，以《用户规则》为最高优先级。
+
+
+
+
+
+

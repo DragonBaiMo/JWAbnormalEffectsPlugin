@@ -1,0 +1,88 @@
+# 积累效果配置
+id: frost
+# =========== 基本信息 ==========
+type: ACCUMULATION  # 积累效果标识
+display-name: "&b冰冻"
+description: "造成减速效果，积累值越高，减速效果越强"
+player-threshold: #玩家的阈值相关
+  threshold-value: 100.0       # 默认触发阈值
+  resistance-step: 0        # 下次触发所需阈值提升 0%
+non-player-threshold: # 非玩家的阈值相关
+  threshold-value: 100.0        # 默认触发阈值
+  resistance-step: 0.25        # 下次触发所需阈值提升 25%
+
+# =========== 积累衰减效果设置 ==========
+decay-per-interval: 2.0      # 每指定 `decay-interval-ticks` 减少 N 点累积值 
+decay-interval-ticks: 40     # 每 N ticks 减少 `decay-per-interval` 点累积值
+decay-inactivity-seconds: 20 # 无新增累积 `decay-inactivity-seconds` 秒后才开始衰减 
+reset-value-after-trigger: 10.0 # 爆发后剩余 `reset-value-after-trigger` 点，避免效果完全消失
+# 支持变量 {threshold} 和公式
+
+# 指令: `ae apply <effectid> <number> <目标者 uuid> <施法者 uuid>` 造成效果
+
+# =========== 数值表达式 ==========
+# 解析的是施法者的变量
+# 造成的 Base 值，玩家与非玩家分别使用不同公式
+player-value-expr: "3 + %mmocore_stat_intelligence% * 0.1 + %player_level% * 0.05"
+non-player-value-expr: "3 + {ATB:ATTACK_DAMAGE} * 0.2"  
+
+
+# =========== 动态值传递修正 ==========
+# 解析的是目标者的变量
+#  使用下列公式动态计算系数，最终值 = <number> × 公式结果。
+#  可用变量：
+#    {deliver}  —— 原始传入值（秒数）
+# -------------------------------------------------------------
+deliver-scaling:
+  enabled: true             
+  player-formula: "max(1 - %mmocore_stat_tenacity% * 0.002, 0.5)"   # 每点韧性减 0.2%，最低 0.5 倍
+  non-player-formula: "max(1 - {VAR:tenacity} * 0.002, 0.5)"
+
+
+# =========== 韧性机制 ==========
+# 解析的是目标者的变量
+# 可用内置变量：
+#   {STAT:<MM属性>} {VAR:<变量名>}(= caster.var.变量名) {ATB:<原版属性值>} %占位符%
+# -------------------------------------------------------------
+tenacity:
+  enabled: true
+  # 玩家与非玩家分别使用不同韧性公式
+  player-formula: "min(0.6, %mmocore_stat_via% * 0.04 + %mmocore_stat_tenacity% * 0.05)"
+  non-player-formula: "min(0.6, %mmocore_stat_via% * 0.04 + {VAR:tenacity} * 0.05)" 
+
+
+# =========== 收益递减 ==========
+# 解析的是目标者的变量
+# 可用内置变量：
+#   {STAT:<MM属性>} {VAR:<变量名>}(= caster.var.变量名) {ATB:<原版属性值>} %占位符%
+# -------------------------------------------------------------
+benefit-scaling: # 可用变量 # sameCount / activeCount
+  enabled: true
+  effect: MOB           # MOB / PLAYER / BOTH 哪些目标生效会生效收益递减
+  formula: "max(1 - ({sameCount} + {activeCount}) * 0.1, 0.1)"  # 最小为 0.1 最大为 1
+  same-count:
+    window-seconds: 10      # 10 秒内连续眩晕同目标会递增 sameCount
+    start-at: 1             # 重新计数时初始值,填 0 则不使用
+
+
+# =========== 技能触发 ==========
+# 默认释放的 MythicMobs 技能（可用 <trigger.var.aeFinal> 占位符来传递最终计算值）
+# ---------------------------------------------------------------------
+# <trigger.var.aeFinal> 传递值 = "value-expr * tenacityFormula * benefit-scaling"
+# --------------------------------------------------------------------- 
+trigger: MM_Skill_Frost_Freeze # 阈值达100%后释放的技能
+# =========== 阶段性技能 ==========
+stages:                     # 阶段性技能
+  25: MM_Skill_Frost_Slow_Light
+  50: MM_Skill_Frost_Slow_Medium
+  75: MM_Skill_Frost_Slow_Heavy
+
+
+# ==== 周期任务示例 ====
+Task:
+  - id: "frost_task1"
+    ticks: 20
+    skill: MM_Skill_Frost_Slow_Ticks20
+  - id: "frost_task2"
+    ticks: 40
+    skill: MM_Skill_Frost_Slow_Ticks40

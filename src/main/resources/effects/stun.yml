@@ -1,0 +1,79 @@
+# 非积累效果配置
+id: stun
+# =========== 基本信息 ==========
+type: NON_ACCUMULATION  # 非积累效果标识
+display-name: "&e眩晕"
+description: |
+  使目标暂时无法移动与攻击，
+  支持韧性与收益递减动态调整持续时间。
+
+# =========== 再次应用策略 ==========
+reapply-policy: IGNORE  # IGNORE / STACK_DURATION / STACK_DURATION_TRIGGER / OVERRIDE / OVERRIDE_SILENT
+# IGNORE: 在效果持续期间，直接忽略本次应用(不会触发技能)
+# STACK_DURATION: 在效果持续期间，叠加持续时长(不会触发技能)
+# STACK_DURATION_TRIGGER: 在效果持续期间，叠加持续时长(会触发技能)
+# OVERRIDE: 在效果持续期间，覆盖之前的效果时长(会触发技能)
+# OVERRIDE_SILENT: 在效果持续期间，覆盖之前的效果时长(不会触发技能)
+
+
+# 指令: `ae apply <effectid> <number> <目标者 uuid> <施法者 uuid>` 造成效果
+
+# =========== 数值表达式 ==========
+# 解析的是施法者的变量
+# 造成的 Base 值，玩家与非玩家分别使用不同公式
+player-value-expr: "3 + %mmocore_stat_intelligence% * 0.1 + %player_level% * 0.05"
+non-player-value-expr: "3 + {ATB:ATTACK_DAMAGE} * 0.2"  
+
+
+# =========== 动态值传递修正 ==========
+# 解析的是目标者的变量
+#  使用下列公式动态计算系数，最终值 = <number> × 公式结果。
+#  可用变量：
+#    {deliver}  —— 原始传入值（秒数）
+# -------------------------------------------------------------
+deliver-scaling:
+  enabled: true             
+  player-formula: "max(1 - %mmocore_stat_tenacity% * 0.002, 0.5)"   # 每点韧性减 0.2%，最低 0.5 倍
+  non-player-formula: "max(1 - {VAR:tenacity} * 0.002, 0.5)"
+
+
+# =========== 韧性机制 ==========
+# 解析的是目标者的变量
+# 可用内置变量：
+#   {STAT:<MM属性>} {VAR:<变量名>}(= caster.var.变量名) {ATB:<原版属性值>} %占位符%
+# -------------------------------------------------------------
+tenacity:
+  enabled: true
+  # 玩家与非玩家分别使用不同韧性公式
+  player-formula: "min(0.6, %mmocore_stat_via% * 0.04 + %mmocore_stat_tenacity% * 0.05)"
+  non-player-formula: "min(0.6, %mmocore_stat_via% * 0.04 + {VAR:tenacity} * 0.05)" 
+
+
+# =========== 收益递减 ==========
+# 解析的是目标者的变量
+# 可用内置变量：
+#   {STAT:<MM属性>} {VAR:<变量名>}(= caster.var.变量名) {ATB:<原版属性值>} %占位符%
+# -------------------------------------------------------------
+benefit-scaling: # 可用变量 # sameCount / activeCount
+  enabled: true
+  effect: MOB           # MOB / PLAYER / BOTH 哪些目标生效会生效收益递减
+  formula: "max(1 - ({sameCount} + {activeCount}) * 0.1, 0.1)"  # 最小为 0.1 最大为 1
+  same-count:
+    window-seconds: 10      # 10 秒内连续眩晕同目标会递增 sameCount
+    start-at: 1             # 重新计数时初始值,填 0 则不使用
+
+
+# =========== 技能触发 ==========
+# 默认释放的 MythicMobs 技能（可用 <trigger.var.aeFinal> 占位符来传递最终计算值）
+# ---------------------------------------------------------------------
+# <trigger.var.aeFinal> 传递值 = "value-expr * tenacityFormula * benefit-scaling"
+# --------------------------------------------------------------------- 
+effect-skill: MM_Skill_Stun_Apply
+
+
+# ==== 周期任务示例 ====
+Task:
+  - id: "stun_tick"
+    ticks: 20          # 1 秒后触发一次
+    skill: MM_Skill_Stun_Tick
+
