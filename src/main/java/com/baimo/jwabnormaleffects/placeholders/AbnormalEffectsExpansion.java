@@ -2,6 +2,7 @@ package com.baimo.jwabnormaleffects.placeholders;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Locale;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.LivingEntity;
@@ -21,10 +22,27 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
  * 提供异常效果相关的占位符
  * 
  * 支持的占位符格式：
- * - %abnormaleffects_<action>_<effectid>% - 查询当前玩家
- * - %abnormaleffects_<action>_<effectid>_<uuid>% - 查询指定UUID的实体
+ * - %ae_<action>_<effectid>% - 查询当前玩家
+ * - %ae_<action>_<effectid>_<uuid>% - 查询指定UUID的实体
  */
 public class AbnormalEffectsExpansion extends PlaceholderExpansion {
+
+    /**
+     * 占位符解析后的结构化请求。
+     */
+    private static final class ParsedPlaceholderRequest {
+        private final String action;
+        private final String effectId;
+        private final UUID targetUUID;
+        private final Double applyValue;
+
+        private ParsedPlaceholderRequest(String action, String effectId, UUID targetUUID, Double applyValue) {
+            this.action = action;
+            this.effectId = effectId;
+            this.targetUUID = targetUUID;
+            this.applyValue = applyValue;
+        }
+    }
     
     private final JWAbnormalEffects plugin;
     private final IEffectEngine effectEngine;
@@ -61,49 +79,41 @@ public class AbnormalEffectsExpansion extends PlaceholderExpansion {
     
     @Override
     public String onPlaceholderRequest(Player player, String params) {
-        if (params == null || params.split("_").length < 2) {
+        ParsedPlaceholderRequest request = parseRequest(params);
+        if (request == null) {
             return null;
         }
 
-        String[] parts = params.split("_");
-        if (parts.length >= 3) {
-            return handleWithUUID(parts, params);
+        if (request.targetUUID != null) {
+            return handleWithUUID(request);
         }
-        
-        return player == null ? null : processPlaceholder(player, params);
+
+        return player == null ? null : processPlaceholder(player, request);
     }
 
     /**
      * 通过UUID处理占位符查询
      * 
-     * @param parts 参数数组
-     * @param params 完整占位符参数
+     * @param request 结构化占位符请求
      * @return 占位符结果
      */
-    private String handleWithUUID(String[] parts, String params) {
-        String uuidStr = parts[2];
-        try {
-            UUID targetUUID = UUID.fromString(uuidStr);
-            
-            // 先尝试直接使用UUID执行查询（性能优化）
-            Object result = processPlaceholderValueByUUID(targetUUID, params);
-            if (result != null) {
-                return convertToString(result);
-            }
-            
-            // 如果直接查询失败，尝试查找实体
-            LivingEntity foundEntity = findEntityByUUID(targetUUID);
-            if (foundEntity != null) {
-                Object entityResult = processPlaceholderValue(foundEntity, params);
-                return entityResult != null ? convertToString(entityResult) : "0";
-            } else {
-                // 找不到指定UUID的实体，记录错误并返回0
-                plugin.getLogger().warning("占位符查询失败：找不到UUID为 " + uuidStr + " 的实体");
-                return "0";
-            }
-        } catch (IllegalArgumentException e) {
-            // UUID格式错误，记录错误并返回0
-            plugin.getLogger().warning("占位符查询失败：UUID格式错误 - " + uuidStr);
+    private String handleWithUUID(ParsedPlaceholderRequest request) {
+        UUID targetUUID = request.targetUUID;
+
+        // 先尝试直接使用UUID执行查询（性能优化）
+        Object result = processPlaceholderValueByUUID(targetUUID, request);
+        if (result != null) {
+            return convertToString(result);
+        }
+
+        // 如果直接查询失败，尝试查找实体
+        LivingEntity foundEntity = findEntityByUUID(targetUUID);
+        if (foundEntity != null) {
+            Object entityResult = processPlaceholderValue(foundEntity, request);
+            return entityResult != null ? convertToString(entityResult) : "0";
+        } else {
+            // 找不到指定UUID的实体，记录错误并返回0
+            plugin.getLogger().warning("占位符查询失败：找不到UUID为 " + targetUUID + " 的实体");
             return "0";
         }
     }
@@ -133,18 +143,13 @@ public class AbnormalEffectsExpansion extends PlaceholderExpansion {
      * 直接通过UUID处理占位符（性能优化版本）
      * 
      * @param entityUUID 实体UUID
-     * @param params 占位符参数
+     * @param request 结构化占位符参数
      * @return 处理结果的原始数据类型，如果无法处理则返回null
      */
-    private Object processPlaceholderValueByUUID(UUID entityUUID, String params) {
-        String[] parts = params.split("_");
-        if (parts.length < 2) {
-            return null;
-        }
-        
-        String action = parts[0].toLowerCase();
-        String effectId = parts[1];
-        
+    private Object processPlaceholderValueByUUID(UUID entityUUID, ParsedPlaceholderRequest request) {
+        String action = request.action;
+        String effectId = request.effectId;
+
         // 验证效果ID是否存在
         Optional<EffectDefinition> optDef = effectRegistry.getEffectDefinition(effectId);
         if (!optDef.isPresent()) {
@@ -152,20 +157,15 @@ public class AbnormalEffectsExpansion extends PlaceholderExpansion {
         }
         
         EffectDefinition effectDef = optDef.get();
+        // 统一使用注册表中的规范 ID，避免大小写差异导致 DataStore 查询不到。
+        effectId = effectDef.getId();
 
         switch (action) {
             // 通用占位符
             case "applyeffect":
                 // 参数格式: applyeffect_<effectId>_<uuid>_<value>
-                // 在此处, parts[3] 为值, 若缺省则默认为 1
-                double applyValue = 1.0;
-                if (parts.length >= 4) {
-                    try {
-                        applyValue = Double.parseDouble(parts[3]);
-                    } catch (NumberFormatException ignored) {
-                        // 使用默认值
-                    }
-                }
+                // <value> 缺省时默认为 1.0
+                double applyValue = request.applyValue != null ? request.applyValue : 1.0;
 
                 // 尝试找到实体并施加效果
                 LivingEntity targetEntity = findEntityByUUID(entityUUID);
@@ -177,6 +177,10 @@ public class AbnormalEffectsExpansion extends PlaceholderExpansion {
                 }
                 
             case "has":
+                if (effectDef.getType() == com.baimo.jwabnormaleffects.config.EffectType.NON_ACCUMULATION) {
+                    // 非积累效果按“当前是否仍有效”判定，避免过期缓存导致假阳性。
+                    return (Boolean) dataStore.isDirectEffectActive(entityUUID, effectId);
+                }
                 return (Boolean) dataStore.hasEffect(entityUUID, effectId);
                 // %ae_has_<effectId>_<uuid>%
             case "display":
@@ -281,8 +285,8 @@ public class AbnormalEffectsExpansion extends PlaceholderExpansion {
     /**
      * 处理玩家相关的占位符
      */
-    private String processPlaceholder(LivingEntity entity, String params) {
-        Object result = processPlaceholderValue(entity, params);
+    private String processPlaceholder(LivingEntity entity, ParsedPlaceholderRequest request) {
+        Object result = processPlaceholderValue(entity, request);
         return result != null ? convertToString(result) : null;
     }
 
@@ -290,11 +294,11 @@ public class AbnormalEffectsExpansion extends PlaceholderExpansion {
      * 处理实体相关的占位符，返回原始数据类型
      * 
      * @param entity 目标实体
-     * @param params 占位符参数
+     * @param request 占位符参数
      * @return 原始数据类型的结果
      */
-    private Object processPlaceholderValue(LivingEntity entity, String params) {
-        return processPlaceholderValueByUUID(entity.getUniqueId(), params);
+    private Object processPlaceholderValue(LivingEntity entity, ParsedPlaceholderRequest request) {
+        return processPlaceholderValueByUUID(entity.getUniqueId(), request);
     }
 
     /**
@@ -344,5 +348,119 @@ public class AbnormalEffectsExpansion extends PlaceholderExpansion {
             cur = PlaceholderAPI.setPlaceholders(player, last);
         } while (!cur.equals(last) && (cur.contains("%") || cur.contains("{")));
         return cur;
+    }
+
+    /**
+     * 将原始 params 解析为结构化请求，兼容 effectId 含下划线的场景。
+     * <p>
+     * 规则：
+     * <ul>
+     *   <li>通用：<code>action_effectId</code></li>
+     *   <li>UUID 模式：<code>action_effectId_uuid</code>（从尾段识别 UUID）</li>
+     *   <li>applyeffect：<code>applyeffect_effectId_uuid[_value]</code></li>
+     * </ul>
+     * </p>
+     */
+    private ParsedPlaceholderRequest parseRequest(String params) {
+        if (params == null || params.trim().isEmpty()) {
+            return null;
+        }
+
+        int firstUnderscore = params.indexOf('_');
+        if (firstUnderscore <= 0 || firstUnderscore == params.length() - 1) {
+            return null;
+        }
+
+        String action = params.substring(0, firstUnderscore).toLowerCase(Locale.ROOT);
+        String remainder = params.substring(firstUnderscore + 1);
+
+        if ("applyeffect".equals(action)) {
+            return parseApplyEffectRequest(action, remainder);
+        }
+
+        UUID tailUuid = extractTailUuid(remainder);
+        if (tailUuid != null) {
+            int lastUnderscore = remainder.lastIndexOf('_');
+            String effectId = remainder.substring(0, lastUnderscore);
+            if (effectId.isEmpty()) {
+                return null;
+            }
+            return new ParsedPlaceholderRequest(action, effectId, tailUuid, null);
+        }
+
+        return new ParsedPlaceholderRequest(action, remainder, null, null);
+    }
+
+    /**
+     * 解析 applyeffect 专用参数。
+     */
+    private ParsedPlaceholderRequest parseApplyEffectRequest(String action, String remainder) {
+        if (remainder == null || remainder.isEmpty()) {
+            return null;
+        }
+
+        // 先尝试：effectId_uuid（无 value）
+        UUID tailUuid = extractTailUuid(remainder);
+        if (tailUuid != null) {
+            int lastUnderscore = remainder.lastIndexOf('_');
+            String effectId = remainder.substring(0, lastUnderscore);
+            if (effectId.isEmpty()) {
+                return null;
+            }
+            return new ParsedPlaceholderRequest(action, effectId, tailUuid, 1.0);
+        }
+
+        // 再尝试：effectId_uuid_value
+        int lastUnderscore = remainder.lastIndexOf('_');
+        if (lastUnderscore <= 0 || lastUnderscore == remainder.length() - 1) {
+            return null;
+        }
+        int secondLastUnderscore = remainder.lastIndexOf('_', lastUnderscore - 1);
+        if (secondLastUnderscore <= 0) {
+            return null;
+        }
+
+        String effectId = remainder.substring(0, secondLastUnderscore);
+        String uuidToken = remainder.substring(secondLastUnderscore + 1, lastUnderscore);
+        String valueToken = remainder.substring(lastUnderscore + 1);
+        UUID uuid = parseUuid(uuidToken);
+        if (effectId.isEmpty() || uuid == null) {
+            return null;
+        }
+
+        double applyValue = 1.0;
+        try {
+            applyValue = Double.parseDouble(valueToken);
+        } catch (NumberFormatException ignored) {
+            // 非法数值回退到默认值
+        }
+
+        return new ParsedPlaceholderRequest(action, effectId, uuid, applyValue);
+    }
+
+    /**
+     * 从以“effectId_uuid”形式的尾段中提取 UUID。
+     */
+    private UUID extractTailUuid(String text) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        int lastUnderscore = text.lastIndexOf('_');
+        if (lastUnderscore <= 0 || lastUnderscore == text.length() - 1) {
+            return null;
+        }
+        String uuidToken = text.substring(lastUnderscore + 1);
+        return parseUuid(uuidToken);
+    }
+
+    private UUID parseUuid(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 }
